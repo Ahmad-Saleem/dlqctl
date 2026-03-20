@@ -1,0 +1,9 @@
+# compiled binary
+dlqctl
+
+# mac
+.DS_Store
+
+# env files
+.env
+*.env
