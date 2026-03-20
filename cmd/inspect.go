@@ -61,6 +61,7 @@ func init() {
 	inspectCmd.Flags().String("queue", "", "SQS Queue URL")
 	inspectCmd.Flags().Int("max", 10, "Number of messages to fetch")
 	inspectCmd.Flags().Bool("follow", false, "Keep polling after draining")
+	inspectCmd.Flags().String("filter", "", "Regex filter for message bodies")
 
 	inspectCmd.MarkFlagRequired("queue")
 
