@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"regexp"
 
 	"github.com/ahmad-saleem/dlqctl/internal/queue"
 	"github.com/spf13/cobra"
@@ -21,6 +22,17 @@ func runInspect(cmd *cobra.Command, args []string) error {
 	queueURL, _ := cmd.Flags().GetString("queue")
 	max, _ := cmd.Flags().GetInt("max")
 	follow, _ := cmd.Flags().GetBool("follow")
+	filter, _ := cmd.Flags().GetString("filter")
+
+	var reg *regexp.Regexp
+	var regErr error
+
+	if filter != "" {
+		reg, regErr = regexp.Compile(filter)
+		if regErr != nil {
+			return regErr
+		}
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -37,6 +49,9 @@ func runInspect(cmd *cobra.Command, args []string) error {
 		}
 
 		for _, msg := range messages {
+			if reg != nil && !reg.MatchString(msg.Body) {
+				continue
+			}
 			fmt.Printf("Message ID: %s, Body: %s\n", msg.ID, msg.Body)
 		}
 
