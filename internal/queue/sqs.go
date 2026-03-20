@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -37,6 +38,11 @@ func (c *Client) Inspect(ctx context.Context, queueURL string, maxMessages int) 
 
 	if err != nil {
 		return nil, err
+	}
+
+	if len(res.Messages) == 0 {
+		fmt.Println("No messages found in the queue.")
+		return nil, nil
 	}
 
 	messages := make([]Message, 0, len(res.Messages))
