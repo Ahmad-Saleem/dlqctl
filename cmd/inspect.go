@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
 
 	"github.com/ahmad-saleem/dlqctl/internal/queue"
 	"github.com/spf13/cobra"
@@ -18,25 +20,36 @@ var inspectCmd = &cobra.Command{
 func runInspect(cmd *cobra.Command, args []string) error {
 	queueURL, _ := cmd.Flags().GetString("queue")
 	max, _ := cmd.Flags().GetInt("max")
-	// follow, _ := cmd.Flags().GetBool("follow")
+	follow, _ := cmd.Flags().GetBool("follow")
 
-	// fmt.Println("Inspect command executed with args:", args)
-	// fmt.Println("Queue:", queue)
-	// fmt.Println("Max messages:", max)
-	// fmt.Println("Follow:", follow)
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
 	client, err := queue.NewClient(ctx, "eu-west-1")
 	if err != nil {
 		return err
 	}
 
-	messages, err := client.Inspect(ctx, queueURL, max)
-	if err != nil {
-		return err
-	}
+	for {
+		messages, err := client.Inspect(ctx, queueURL, max)
+		if err != nil {
+			return err
+		}
 
-	for _, msg := range messages {
-		fmt.Printf("Message ID: %s, Body: %s\n", msg.ID, msg.Body)
+		for _, msg := range messages {
+			fmt.Printf("Message ID: %s, Body: %s\n", msg.ID, msg.Body)
+		}
+
+		if !follow {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			fmt.Println("Exiting...")
+			return nil
+		default:
+		}
 	}
 
 	return nil
