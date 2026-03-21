@@ -24,7 +24,7 @@ func runReplay(cmd *cobra.Command, args []string) error {
 	ctx, stop := newContext()
 	defer stop()
 
-	client, err := newQueueClient(ctx)
+	client, err := newQueueClient(ctx, cmd)
 	if err != nil {
 		return err
 	}
