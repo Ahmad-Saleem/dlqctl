@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -55,4 +56,26 @@ func (c *Client) Inspect(ctx context.Context, queueURL string, maxMessages int) 
 	}
 
 	return messages, nil
+}
+
+func (c *Client) Replay(ctx context.Context, targetQueueURL string, body string) error {
+	_, err := c.sqs.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:    &targetQueueURL,
+		MessageBody: &body,
+	})
+	return err
+}
+
+func MatchFilter(body, filter string) (bool, error) {
+	var reg *regexp.Regexp
+	var regErr error
+
+	if filter != "" {
+		reg, regErr = regexp.Compile(filter)
+		if regErr != nil {
+			return false, regErr
+		}
+	}
+
+	return reg.MatchString(body), nil
 }
