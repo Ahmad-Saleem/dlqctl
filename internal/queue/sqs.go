@@ -2,7 +2,10 @@ package queue
 
 import (
 	"context"
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"io"
 	"regexp"
 
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -88,4 +91,27 @@ func MatchFilter(body, filter string) (bool, error) {
 	}
 
 	return reg.MatchString(body), nil
+}
+
+func WriteJSON(w io.Writer, messages []Message) error {
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+
+	return encoder.Encode(messages)
+}
+
+func WriteCSV(w io.Writer, messages []Message) error {
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+	if err := writer.Write([]string{"id", "body"}); err != nil {
+		return err
+	}
+
+	for _, m := range messages {
+		if err := writer.Write([]string{m.ID, m.Body}); err != nil {
+			return err
+		}
+	}
+
+	return writer.Error()
 }
