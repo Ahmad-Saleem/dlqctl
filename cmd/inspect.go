@@ -1,10 +1,7 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
-	"os/signal"
 
 	"github.com/ahmad-saleem/dlqctl/internal/queue"
 	"github.com/spf13/cobra"
@@ -23,10 +20,10 @@ func runInspect(cmd *cobra.Command, args []string) error {
 	follow, _ := cmd.Flags().GetBool("follow")
 	filter, _ := cmd.Flags().GetString("filter")
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := newContext()
 	defer stop()
 
-	client, err := queue.NewClient(ctx, "eu-west-1")
+	client, err := newQueueClient(ctx)
 	if err != nil {
 		return err
 	}
