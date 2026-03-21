@@ -26,8 +26,9 @@ func NewClient(ctx context.Context, region string) (*Client, error) {
 }
 
 type Message struct {
-	ID   string
-	Body string
+	ID            string
+	Body          string
+	ReceiptHandle string
 }
 
 func (c *Client) Inspect(ctx context.Context, queueURL string, maxMessages int) ([]Message, error) {
@@ -50,8 +51,9 @@ func (c *Client) Inspect(ctx context.Context, queueURL string, maxMessages int) 
 
 	for _, msg := range res.Messages {
 		messages = append(messages, Message{
-			ID:   *msg.MessageId,
-			Body: *msg.Body,
+			ID:            *msg.MessageId,
+			Body:          *msg.Body,
+			ReceiptHandle: *msg.ReceiptHandle,
 		})
 	}
 
