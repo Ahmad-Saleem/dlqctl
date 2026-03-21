@@ -61,6 +61,10 @@ func runReplay(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to replay message %s: %w", m.ID, err)
 		}
 
+		if err := client.Delete(ctx, sourceQueueURL, m.ReceiptHandle); err != nil {
+			return fmt.Errorf("failed to delete message %s from DLQ: %w", m.ID, err)
+		}
+
 		fmt.Printf("replayed: %s\n", m.ID)
 		replayed++
 	}
