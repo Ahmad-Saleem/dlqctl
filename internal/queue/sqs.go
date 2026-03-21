@@ -68,6 +68,14 @@ func (c *Client) Replay(ctx context.Context, targetQueueURL string, body string)
 	return err
 }
 
+func (c *Client) Delete(ctx context.Context, queueURL, receiptHandle string) error {
+	_, err := c.sqs.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+		QueueUrl:      &queueURL,
+		ReceiptHandle: &receiptHandle,
+	})
+	return err
+}
+
 func MatchFilter(body, filter string) (bool, error) {
 	var reg *regexp.Regexp
 	var regErr error
