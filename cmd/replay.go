@@ -1,10 +1,7 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
-	"os/signal"
 
 	"github.com/ahmad-saleem/dlqctl/internal/queue"
 	"github.com/spf13/cobra"
@@ -24,12 +21,12 @@ func runReplay(cmd *cobra.Command, args []string) error {
 	max, _ := cmd.Flags().GetInt("max")
 	filter, _ := cmd.Flags().GetString("filter")
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := newContext()
 	defer stop()
 
-	client, err := queue.NewClient(ctx, "eu-west-1")
+	client, err := newQueueClient(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create SQS client: %w", err)
+		return err
 	}
 
 	messages, err := client.Inspect(ctx, sourceQueueURL, max)
