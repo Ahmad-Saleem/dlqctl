@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/ahmad-saleem/dlqctl/internal/queue"
 	"github.com/spf13/cobra"
@@ -40,8 +41,7 @@ func runReplay(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	replayed := 0
-	skipped := 0
+	var toReplay []queue.Message
 
 	for _, m := range messages {
 		if filter != "" {
@@ -50,24 +50,32 @@ func runReplay(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("invalid filter regex: %w", err)
 			}
 			if !matched {
-				skipped++
 				continue
 			}
 		}
-
-		if err := client.Replay(ctx, targetQueueURL, m.Body); err != nil {
-			return fmt.Errorf("failed to replay message %s: %w", m.ID, err)
-		}
-
-		if err := client.Delete(ctx, sourceQueueURL, m.ReceiptHandle); err != nil {
-			return fmt.Errorf("failed to delete message %s from DLQ: %w", m.ID, err)
-		}
-
-		fmt.Printf("replayed: %s\n", m.ID)
-		replayed++
+		toReplay = append(toReplay, m)
 	}
 
-	fmt.Printf("\ndone. replayed: %d, skipped: %d\n", replayed, skipped)
+	skipped := len(messages) - len(toReplay)
+
+	if len(toReplay) == 0 {
+		fmt.Println("no messages matched the filter criteria")
+		return nil
+	}
+
+	errors := client.ReplayWorkerPool(ctx, sourceQueueURL, targetQueueURL, toReplay, workers)
+
+	fmt.Printf("\ndone. replayed: %d, skipped: %d, errors: %d\n", len(toReplay)-len(errors), skipped, len(errors))
+
+	if len(errors) > 0 {
+		for _, err := range errors {
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error replaying message: %v\n", err)
+			}
+		}
+		return fmt.Errorf("%d messages failed to replay", len(errors))
+	}
+
 	return nil
 }
 
