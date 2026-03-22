@@ -20,6 +20,7 @@ func runReplay(cmd *cobra.Command, args []string) error {
 	targetQueueURL, _ := cmd.Flags().GetString("targetQueueURL")
 	max, _ := cmd.Flags().GetInt("max")
 	filter, _ := cmd.Flags().GetString("filter")
+	workers, _ := cmd.Flags().GetInt("workers")
 
 	ctx, stop := newContext()
 	defer stop()
@@ -77,6 +78,7 @@ func init() {
 	replayCmd.Flags().StringP("targetQueueURL", "T", "", "The URL of the Target SQS queue to replay messages to")
 	replayCmd.Flags().IntP("max", "M", 10, "Maximum number of messages to retrieve")
 	replayCmd.Flags().StringP("filter", "F", "", "Regex filter to apply to message bodies")
+	replayCmd.Flags().IntP("workers", "W", 1, "Number of concurrent workers to use for replaying messages")
 
 	replayCmd.MarkFlagRequired("sourceQueueURL")
 	replayCmd.MarkFlagRequired("targetQueueURL")
