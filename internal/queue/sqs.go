@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -69,6 +70,47 @@ func (c *Client) Replay(ctx context.Context, targetQueueURL string, body string)
 		MessageBody: &body,
 	})
 	return err
+}
+
+func (c *Client) ReplayWorkerPool(ctx context.Context, sourceQueueURL, targetQueueURL string, messages []Message, worker int) []error {
+
+	jobs := make(chan Message, len(messages))
+	results := make(chan error, len(messages))
+
+	var wg sync.WaitGroup
+	for i := 0; i < worker; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for m := range jobs {
+				if err := c.Replay(ctx, targetQueueURL, m.Body); err != nil {
+					results <- err
+					continue
+				}
+
+				if err := c.Delete(ctx, sourceQueueURL, m.ReceiptHandle); err != nil {
+					results <- err
+					continue
+				}
+			}
+		}()
+	}
+
+	for _, m := range messages {
+		jobs <- m
+	}
+	close(jobs)
+
+	wg.Wait()
+	close(results)
+
+	var errs []error
+	for err := range results {
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errs
 }
 
 func (c *Client) Delete(ctx context.Context, queueURL, receiptHandle string) error {
