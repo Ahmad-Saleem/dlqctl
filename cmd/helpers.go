@@ -14,7 +14,7 @@ func newContext() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt)
 }
 
-func newQueueClient(ctx context.Context, cmd *cobra.Command) (*queue.Client, error) {
+func newQueueClient(ctx context.Context, cmd *cobra.Command) (queue.Queue, error) {
 
 	region, _ := cmd.Flags().GetString("region")
 
