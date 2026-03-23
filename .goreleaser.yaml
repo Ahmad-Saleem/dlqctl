@@ -36,7 +36,7 @@ changelog:
 
 brews:
   - repository:
-      owner: yourusername
+      owner: ahmad-saleem
       name: homebrew-dlqctl
     homepage: "https://github.com/ahmad-saleem/dlqctl"
     description: "Dead-letter queue manager for SQS and Kafka"
