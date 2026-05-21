@@ -83,14 +83,8 @@ func (c *Client) ReplayWorkerPool(ctx context.Context, sourceQueueURL, targetQue
 		go func() {
 			defer wg.Done()
 			for m := range jobs {
-				if err := c.Replay(ctx, targetQueueURL, m.Body); err != nil {
+				if err := c.replayAndDelete(ctx, sourceQueueURL, targetQueueURL, m); err != nil {
 					results <- err
-					continue
-				}
-
-				if err := c.Delete(ctx, sourceQueueURL, m.ReceiptHandle); err != nil {
-					results <- err
-					continue
 				}
 			}
 		}()
@@ -111,6 +105,14 @@ func (c *Client) ReplayWorkerPool(ctx context.Context, sourceQueueURL, targetQue
 		}
 	}
 	return errs
+}
+
+func (c *Client) replayAndDelete(ctx context.Context, sourceQueueURL, targetQueueURL string, m Message) error {
+	if err := c.Replay(ctx, targetQueueURL, m.Body); err != nil {
+		return err
+	}
+
+	return c.Delete(ctx, sourceQueueURL, m.ReceiptHandle)
 }
 
 func (c *Client) Delete(ctx context.Context, queueURL, receiptHandle string) error {
