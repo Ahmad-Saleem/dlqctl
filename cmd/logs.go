@@ -29,6 +29,10 @@ func runLogs(cmd *cobra.Command, args []string) error {
 
 	var startTime, endTime time.Time
 
+	if (start != "" && end == "") || (start == "" && end != "") {
+		return fmt.Errorf("--start and --end must be used together")
+	}
+
 	if start != "" && end != "" {
 		var err error
 		startTime, err = time.Parse(time.RFC3339, start)
