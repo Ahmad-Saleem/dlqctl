@@ -56,7 +56,6 @@ func runInspect(cmd *cobra.Command, args []string) error {
 		}
 
 		for _, msg := range messages {
-
 			matched, err := queue.MatchFilter(msg.Body, filter)
 			if err != nil {
 				return err
@@ -65,7 +64,36 @@ func runInspect(cmd *cobra.Command, args []string) error {
 			if !matched {
 				continue
 			}
+
 			fmt.Printf("Message ID: %s, Body: %s\n", msg.ID, msg.Body)
+
+			if trace {
+				val, err := extract.Field(msg.Body, traceField)
+				if err != nil {
+					fmt.Printf("  [trace] %v\n", err)
+					continue
+				}
+
+				since, _ := cmd.Flags().GetString("since")
+				if since == "" {
+					since = "1h"
+				}
+				start, end, _ := timeparse.ParseSince(since)
+
+				events, err := logsClient.Search(ctx, logGroup, val, start, end, 10)
+				if err != nil {
+					fmt.Printf("  [trace] log search failed: %v\n", err)
+					continue
+				}
+
+				if len(events) == 0 {
+					fmt.Println("  [trace] no matching logs found")
+				}
+
+				for _, e := range events {
+					fmt.Printf("  [log] %s  %s", e.Timestamp.Format(time.RFC3339), e.Message)
+				}
+			}
 		}
 
 		if !follow {
