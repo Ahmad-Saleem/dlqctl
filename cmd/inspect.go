@@ -2,9 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/ahmad-saleem/dlqctl/internal/extract"
+	"github.com/ahmad-saleem/dlqctl/internal/logs"
 	"github.com/ahmad-saleem/dlqctl/internal/queue"
+	"github.com/ahmad-saleem/dlqctl/internal/timeparse"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var inspectCmd = &cobra.Command{
@@ -19,6 +24,13 @@ func runInspect(cmd *cobra.Command, args []string) error {
 	max, _ := cmd.Flags().GetInt("max")
 	follow, _ := cmd.Flags().GetBool("follow")
 	filter, _ := cmd.Flags().GetString("filter")
+	trace, _ := cmd.Flags().GetBool("trace")
+	traceField, _ := cmd.Flags().GetString("trace-field")
+	logGroup, _ := cmd.Flags().GetString("log-group")
+
+	if trace && logGroup == "" {
+		return fmt.Errorf("--log-group is required when using --trace")
+	}
 
 	ctx, stop := newContext()
 	defer stop()
@@ -26,6 +38,15 @@ func runInspect(cmd *cobra.Command, args []string) error {
 	client, err := newQueueClient(ctx, cmd)
 	if err != nil {
 		return err
+	}
+
+	var logsClient *logs.Client
+	if trace {
+		region := viper.GetString("aws.region")
+		logsClient, err = logs.NewClient(ctx, region)
+		if err != nil {
+			return err
+		}
 	}
 
 	for {
@@ -69,6 +90,11 @@ func init() {
 	inspectCmd.Flags().Int("max", 10, "Number of messages to fetch")
 	inspectCmd.Flags().Bool("follow", false, "Keep polling after draining")
 	inspectCmd.Flags().String("filter", "", "Regex filter for message bodies")
+
+	inspectCmd.Flags().Bool("trace", false, "Search CloudWatch logs for each DLQ message")
+	inspectCmd.Flags().String("trace-field", "", "JSON field to extract as search pattern")
+	inspectCmd.Flags().String("log-group", "", "CloudWatch Log Group to search")
+	inspectCmd.Flags().String("since", "1h", "Time range for log search (e.g. 30m, 2h, 1d)")
 
 	inspectCmd.MarkFlagRequired("queue")
 
