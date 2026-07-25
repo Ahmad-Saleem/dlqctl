@@ -151,4 +151,4 @@ Facts that are easy to get wrong when modifying this codebase:
 
 ## License
 
-Not yet specified.
+Open source under the [MIT License](LICENSE) — free for any kind of use, personal or commercial.
