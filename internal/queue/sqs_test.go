@@ -11,10 +11,16 @@ func TestMatchFilter(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:   "matches when pattern found in body",
+			name:   "no match when literal pattern not in body",
 			body:   `{"userId": "123", "event": "click"}`,
 			filter: "userId=123",
 			want:   false,
+		},
+		{
+			name:   "empty filter matches everything",
+			body:   `{"userId": "123"}`,
+			filter: "",
+			want:   true,
 		},
 		{
 			name:   "matches with correct pattern",

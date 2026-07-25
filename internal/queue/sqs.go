@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
-	"fmt"
 	"io"
 	"regexp"
 	"sync"
@@ -36,29 +35,41 @@ type Message struct {
 }
 
 func (c *Client) Inspect(ctx context.Context, queueURL string, maxMessages int) ([]Message, error) {
-	res, err := c.sqs.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
-		QueueUrl:            &queueURL,
-		MaxNumberOfMessages: int32(maxMessages),
-		WaitTimeSeconds:     int32(20),
-	})
+	messages := make([]Message, 0, maxMessages)
 
-	if err != nil {
-		return nil, err
-	}
+	// SQS caps a single ReceiveMessage at 10 messages, so fetch in batches.
+	// Long-poll only on the first call; once the queue has answered, drain
+	// the rest with short polls.
+	waitTime := int32(20)
 
-	if len(res.Messages) == 0 {
-		fmt.Println("No messages found in the queue.")
-		return nil, nil
-	}
+	for len(messages) < maxMessages {
+		batchSize := maxMessages - len(messages)
+		if batchSize > 10 {
+			batchSize = 10
+		}
 
-	messages := make([]Message, 0, len(res.Messages))
-
-	for _, msg := range res.Messages {
-		messages = append(messages, Message{
-			ID:            *msg.MessageId,
-			Body:          *msg.Body,
-			ReceiptHandle: *msg.ReceiptHandle,
+		res, err := c.sqs.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+			QueueUrl:            &queueURL,
+			MaxNumberOfMessages: int32(batchSize),
+			WaitTimeSeconds:     waitTime,
 		})
+		if err != nil {
+			return nil, err
+		}
+
+		if len(res.Messages) == 0 {
+			break
+		}
+
+		for _, msg := range res.Messages {
+			messages = append(messages, Message{
+				ID:            *msg.MessageId,
+				Body:          *msg.Body,
+				ReceiptHandle: *msg.ReceiptHandle,
+			})
+		}
+
+		waitTime = 1
 	}
 
 	return messages, nil
@@ -124,14 +135,13 @@ func (c *Client) Delete(ctx context.Context, queueURL, receiptHandle string) err
 }
 
 func MatchFilter(body, filter string) (bool, error) {
-	var reg *regexp.Regexp
-	var regErr error
+	if filter == "" {
+		return true, nil
+	}
 
-	if filter != "" {
-		reg, regErr = regexp.Compile(filter)
-		if regErr != nil {
-			return false, regErr
-		}
+	reg, err := regexp.Compile(filter)
+	if err != nil {
+		return false, err
 	}
 
 	return reg.MatchString(body), nil

@@ -1,16 +1,13 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
-	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/ahmad-saleem/dlqctl/internal/logs"
 	"github.com/ahmad-saleem/dlqctl/internal/timeparse"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var logsCmd = &cobra.Command{
@@ -27,34 +24,15 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	end, _ := cmd.Flags().GetString("end")
 	max, _ := cmd.Flags().GetInt("max")
 
-	var startTime, endTime time.Time
-
-	if (start != "" && end == "") || (start == "" && end != "") {
-		return fmt.Errorf("--start and --end must be used together")
+	startTime, endTime, err := resolveTimeRange(since, start, end)
+	if err != nil {
+		return err
 	}
 
-	if start != "" && end != "" {
-		var err error
-		startTime, err = time.Parse(time.RFC3339, start)
-		if err != nil {
-			return fmt.Errorf("invalid --start format (expected ISO 8601): %w", err)
-		}
-		endTime, err = time.Parse(time.RFC3339, end)
-		if err != nil {
-			return fmt.Errorf("invalid --end format (expected ISO 8601): %w", err)
-		}
-	} else {
-		var err error
-		startTime, endTime, err = timeparse.ParseSince(since)
-		if err != nil {
-			return fmt.Errorf("invalid --since value: %w", err)
-		}
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := newContext()
 	defer stop()
 
-	region := viper.GetString("aws.region")
+	region, _ := cmd.Flags().GetString("region")
 
 	client, err := logs.NewClient(ctx, region)
 	if err != nil {
@@ -72,12 +50,42 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, e := range events {
-		fmt.Printf("%s  %s", e.Timestamp.Format(time.RFC3339), e.Message)
+		fmt.Printf("%s  %s\n", e.Timestamp.Format(time.RFC3339), strings.TrimRight(e.Message, "\n"))
 	}
 
 	fmt.Printf("\n%d event(s) found\n", len(events))
 
 	return nil
+}
+
+func resolveTimeRange(since, start, end string) (time.Time, time.Time, error) {
+	if (start != "") != (end != "") {
+		return time.Time{}, time.Time{}, fmt.Errorf("--start and --end must be used together")
+	}
+
+	if start == "" {
+		startTime, endTime, err := timeparse.ParseSince(since)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid --since value: %w", err)
+		}
+		return startTime, endTime, nil
+	}
+
+	startTime, err := time.Parse(time.RFC3339, start)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid --start format (expected ISO 8601): %w", err)
+	}
+
+	endTime, err := time.Parse(time.RFC3339, end)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid --end format (expected ISO 8601): %w", err)
+	}
+
+	if !endTime.After(startTime) {
+		return time.Time{}, time.Time{}, fmt.Errorf("--end must be after --start")
+	}
+
+	return startTime, endTime, nil
 }
 
 func init() {

@@ -45,6 +45,12 @@ func (c *Client) Search(ctx context.Context, logGroup, pattern string, start, en
 			NextToken:     nextToken,
 		}
 
+		// FilterLogEvents accepts a limit of 1-10000 per page.
+		if remaining := max - len(events); remaining > 0 && remaining <= 10000 {
+			limit := int32(remaining)
+			input.Limit = &limit
+		}
+
 		out, err := c.cwl.FilterLogEvents(ctx, input)
 		if err != nil {
 			return nil, fmt.Errorf("FilterLogEvents failed: %w", err)
