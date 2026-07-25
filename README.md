@@ -12,10 +12,10 @@ A CLI for operating on AWS SQS dead-letter queues: inspect stuck messages, corre
 ## Install
 
 ```sh
-# Homebrew
-brew install ahmad-saleem/dlqctl/dlqctl
+# Homebrew (macOS)
+brew install --cask ahmad-saleem/dlqctl/dlqctl
 
-# From source (requires Go >= 1.26)
+# From source (any platform, requires Go >= 1.26)
 go install github.com/ahmad-saleem/dlqctl@latest
 ```
 
@@ -132,7 +132,7 @@ internal/timeparse/        # --since parsing (Go durations + "d" suffix)
 ### CI & releases
 
 - **CI** (`.github/workflows/ci.yml`): runs `go vet`, `go test`, `go build` on pushes to `main` and on pull requests. Go version comes from `go.mod` (`go-version-file`).
-- **Releases** (`.github/workflows/release.yml`): pushing a tag matching `v*` runs GoReleaser v2 (`.goreleaser.yaml`), which builds all platform binaries, creates a GitHub release with checksums, and updates the Homebrew tap `ahmad-saleem/homebrew-dlqctl`. Requires the `HOMEBREW_TAP_TOKEN` repository secret.
+- **Releases** (`.github/workflows/release.yml`): pushing a tag matching `v*` runs GoReleaser v2 (`.goreleaser.yaml`), which builds all platform binaries, creates a GitHub release with checksums, and publishes a Homebrew cask to the tap `ahmad-saleem/homebrew-dlqctl`. Requires the `HOMEBREW_TAP_TOKEN` repository secret.
 - **Commit convention**: conventional commits (`feat:`, `fix:`, `chore:`, `ci:`, `build:`, `docs:`, `test:`). The release changelog excludes `docs:`, `test:`, and `chore:` commits.
 
 ## Notes for AI agents
@@ -146,7 +146,7 @@ Facts that are easy to get wrong when modifying this codebase:
 - SQS `ReceiveMessage` rejects `MaxNumberOfMessages > 10`; any new fetch path must batch (see `Client.Inspect`).
 - CloudWatch log messages may lack trailing newlines; output paths trim and add `\n` explicitly.
 - Verification before committing: `go build ./... && go vet ./... && go test ./...`. Tests are pure unit tests and must not require AWS credentials or network access.
-- `.goreleaser.yaml` is GoReleaser **v2** syntax (`version: 2`, `archives.formats`). Validate config changes with `goreleaser check`. The `brews` section is deprecated upstream in favor of `homebrew_casks` but kept deliberately for Homebrew-on-Linux support.
+- `.goreleaser.yaml` is GoReleaser **v2** syntax (`version: 2`, `archives.formats`). Validate config changes with `goreleaser check`. Homebrew distribution uses `homebrew_casks` (casks are macOS-only; Linux users install via `go install` or release binaries). The cask has a post-install hook that strips the macOS quarantine attribute because release binaries are not notarized — keep it when editing the cask config.
 - Do not commit binaries: `dlqctl`, `tmp/`, and `dist/` are gitignored.
 
 ## License
