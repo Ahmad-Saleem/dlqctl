@@ -1,5 +1,9 @@
-# compiled binary
+# compiled binaries
 dlqctl
+tmp/
+
+# goreleaser output
+dist/
 
 # mac
 .DS_Store
