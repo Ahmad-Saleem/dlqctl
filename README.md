@@ -1,4 +1,9 @@
-# dlqctl
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo.svg" alt="dlqctl" width="380">
+  </picture>
+</p>
 
 A CLI for operating on AWS SQS dead-letter queues: inspect stuck messages, correlate them with CloudWatch Logs, replay them back to their source queue, and export them to files.
 
