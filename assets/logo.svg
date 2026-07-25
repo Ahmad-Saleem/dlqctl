@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 268 96" role="img" aria-label="dlqctl">
+  <g fill="none" stroke="#334155" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <!-- queued letters -->
+    <rect x="8" y="58" width="24" height="18" rx="3"/>
+    <path d="M11 62 L20 70 L29 62"/>
+    <rect x="40" y="58" width="24" height="18" rx="3"/>
+    <path d="M43 62 L52 70 L61 62"/>
+  </g>
+  <!-- dead letter -->
+  <g fill="none" stroke="#d97706" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="72" y="58" width="24" height="18" rx="3" fill="#f59e0b" fill-opacity="0.15"/>
+    <path d="M75 62 L84 70 L93 62"/>
+  </g>
+  <!-- replay arc -->
+  <path d="M84 52 C 84 16, 20 16, 20 43" fill="none" stroke="#d97706" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M14 42 L26 42 L20 52 Z" fill="#d97706"/>
+  <!-- wordmark -->
+  <text x="112" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="40" font-weight="700" fill="#334155">dlqctl</text>
+</svg>
