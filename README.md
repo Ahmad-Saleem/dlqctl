@@ -139,7 +139,7 @@ internal/timeparse/        # --since parsing (Go durations + "d" suffix)
 ### CI & releases
 
 - **CI** (`.github/workflows/ci.yml`): runs `go vet`, `go test`, `go build` on pushes to `main` and on pull requests. Go version comes from `go.mod` (`go-version-file`).
-- **Releases** (`.github/workflows/release.yml`): pushing a tag matching `v*` runs GoReleaser v2 (`.goreleaser.yaml`), which builds all platform binaries, creates a GitHub release with checksums, and publishes a Homebrew cask to the tap `ahmad-saleem/homebrew-dlqctl`. Requires the `HOMEBREW_TAP_TOKEN` repository secret.
+- **Releases** (`.github/workflows/release.yml`): pushing a tag matching `v*` runs GoReleaser v2 (`.goreleaser.yaml`), which builds all platform binaries, `.deb`/`.rpm` packages (`nfpms`, version-less filenames so `latest/download` URLs stay stable), creates a GitHub release with checksums, and publishes a Homebrew cask to the tap `ahmad-saleem/homebrew-dlqctl`. Requires the `HOMEBREW_TAP_TOKEN` repository secret.
 - **Commit convention**: conventional commits (`feat:`, `fix:`, `chore:`, `ci:`, `build:`, `docs:`, `test:`). The release changelog excludes `docs:`, `test:`, and `chore:` commits.
 
 ## Notes for AI agents
