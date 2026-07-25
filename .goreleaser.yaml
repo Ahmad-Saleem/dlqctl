@@ -36,10 +36,18 @@ changelog:
       - "^test:"
       - "^chore:"
 
-brews:
+homebrew_casks:
   - repository:
       owner: ahmad-saleem
       name: homebrew-dlqctl
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/ahmad-saleem/dlqctl"
-    description: "Dead-letter queue manager for SQS and Kafka"
+    description: "A CLI for operating on AWS SQS dead-letter queues: inspect stuck messages, correlate them with CloudWatch Logs, replay them back to their source queue, and export them to files."
+    # Binaries are not notarized; strip the quarantine flag so Gatekeeper
+    # does not block the installed binary.
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/dlqctl"]
+          end
