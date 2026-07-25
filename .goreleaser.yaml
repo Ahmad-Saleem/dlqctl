@@ -25,6 +25,21 @@ archives:
       - goos: windows
         formats: [zip]
 
+nfpms:
+  - package_name: dlqctl
+    # Stable filenames (no version) so the GitHub "latest/download" URL works.
+    file_name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    vendor: Ahmad Saleem
+    maintainer: Ahmad Saleem <ahmad.abdo.saleem@gmail.com>
+    homepage: "https://github.com/ahmad-saleem/dlqctl"
+    description: "A CLI for operating on AWS SQS dead-letter queues: inspect stuck messages, correlate them with CloudWatch Logs, replay them back to their source queue, and export them to files."
+    license: MIT
+    section: utils
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+
 checksum:
   name_template: "checksums.txt"
 
