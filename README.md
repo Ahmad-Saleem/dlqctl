@@ -15,11 +15,18 @@ A CLI for operating on AWS SQS dead-letter queues: inspect stuck messages, corre
 # Homebrew (macOS)
 brew install --cask ahmad-saleem/dlqctl/dlqctl
 
+# Debian/Ubuntu (also available: arm64, .rpm for Fedora/RHEL)
+curl -LO https://github.com/ahmad-saleem/dlqctl/releases/latest/download/dlqctl_linux_amd64.deb
+sudo apt install ./dlqctl_linux_amd64.deb
+
+# Fedora/RHEL
+sudo dnf install https://github.com/ahmad-saleem/dlqctl/releases/latest/download/dlqctl_linux_amd64.rpm
+
 # From source (any platform, requires Go >= 1.26)
 go install github.com/ahmad-saleem/dlqctl@latest
 ```
 
-Prebuilt binaries for Linux, macOS, and Windows (amd64/arm64) are on the [releases page](https://github.com/ahmad-saleem/dlqctl/releases).
+Prebuilt binaries and packages for Linux, macOS, and Windows (amd64/arm64) are on the [releases page](https://github.com/ahmad-saleem/dlqctl/releases).
 
 ## Quick start
 
