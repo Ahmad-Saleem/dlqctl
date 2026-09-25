@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"regexp"
 
 	"github.com/ahmad-saleem/dlqctl/internal/queue"
 	"github.com/spf13/cobra"
@@ -22,6 +23,10 @@ func runReplay(cmd *cobra.Command, args []string) error {
 	max, _ := cmd.Flags().GetInt("max")
 	filter, _ := cmd.Flags().GetString("filter")
 	workers, _ := cmd.Flags().GetInt("workers")
+
+	if err := validateReplay(filter, workers); err != nil {
+		return err
+	}
 
 	ctx, stop := newContext()
 	defer stop()
@@ -74,6 +79,18 @@ func runReplay(cmd *cobra.Command, args []string) error {
 			}
 		}
 		return fmt.Errorf("%d messages failed to replay", len(errors))
+	}
+
+	return nil
+}
+
+func validateReplay(filter string, workers int) error {
+	if workers < 1 {
+		return fmt.Errorf("--workers must be at least 1, got %d", workers)
+	}
+
+	if _, err := regexp.Compile(filter); err != nil {
+		return fmt.Errorf("invalid filter regex: %w", err)
 	}
 
 	return nil

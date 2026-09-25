@@ -82,7 +82,7 @@ Receives messages from a source queue (the DLQ), optionally filters them, sends 
 | `--targetQueueURL` | `-T` | yes | — | Queue to send to |
 | `--max` | `-M` | no | `10` | Max messages to replay |
 | `--filter` | `-F` | no | — | Regex; only matching bodies are replayed |
-| `--workers` | `-W` | no | `1` | Concurrent workers |
+| `--workers` | `-W` | no | `1` | Concurrent workers (must be ≥ 1) |
 
 ### `dlqctl export`
 

@@ -66,7 +66,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 func init() {
 	rootCmd.AddCommand(exportCmd)
 
-	exportCmd.Flags().StringP("queue", "q", "", "Name of the queue to export messages from")
+	exportCmd.Flags().StringP("queue", "q", "", "SQS queue URL to export messages from")
 	exportCmd.Flags().StringP("format", "f", "json", "Output format for exported messages")
 	exportCmd.Flags().StringP("output", "o", "export.json", "Output file for exported messages")
 	exportCmd.Flags().IntP("max", "m", 100, "Maximum number of messages to export")

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -34,6 +35,10 @@ type inspectOptions struct {
 func (o inspectOptions) validate() error {
 	if o.trace && o.logGroup == "" {
 		return fmt.Errorf("--log-group is required when using --trace")
+	}
+
+	if _, err := regexp.Compile(o.filter); err != nil {
+		return fmt.Errorf("invalid --filter regex: %w", err)
 	}
 
 	if _, _, err := timeparse.ParseSince(o.since); err != nil {
