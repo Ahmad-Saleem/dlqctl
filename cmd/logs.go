@@ -24,7 +24,7 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	end, _ := cmd.Flags().GetString("end")
 	max, _ := cmd.Flags().GetInt("max")
 
-	startTime, endTime, err := resolveTimeRange(since, start, end)
+	startTime, endTime, err := timeparse.Resolve(since, start, end)
 	if err != nil {
 		return err
 	}
@@ -56,36 +56,6 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\n%d event(s) found\n", len(events))
 
 	return nil
-}
-
-func resolveTimeRange(since, start, end string) (time.Time, time.Time, error) {
-	if (start != "") != (end != "") {
-		return time.Time{}, time.Time{}, fmt.Errorf("--start and --end must be used together")
-	}
-
-	if start == "" {
-		startTime, endTime, err := timeparse.ParseSince(since)
-		if err != nil {
-			return time.Time{}, time.Time{}, fmt.Errorf("invalid --since value: %w", err)
-		}
-		return startTime, endTime, nil
-	}
-
-	startTime, err := time.Parse(time.RFC3339, start)
-	if err != nil {
-		return time.Time{}, time.Time{}, fmt.Errorf("invalid --start format (expected ISO 8601): %w", err)
-	}
-
-	endTime, err := time.Parse(time.RFC3339, end)
-	if err != nil {
-		return time.Time{}, time.Time{}, fmt.Errorf("invalid --end format (expected ISO 8601): %w", err)
-	}
-
-	if !endTime.After(startTime) {
-		return time.Time{}, time.Time{}, fmt.Errorf("--end must be after --start")
-	}
-
-	return startTime, endTime, nil
 }
 
 func init() {

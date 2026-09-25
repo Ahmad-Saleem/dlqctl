@@ -14,6 +14,11 @@ type LogEvent struct {
 	Message   string
 }
 
+// Searcher searches a CloudWatch Log Group. *Client implements it.
+type Searcher interface {
+	Search(ctx context.Context, logGroup, pattern string, start, end time.Time, max int) ([]LogEvent, error)
+}
+
 type Client struct {
 	cwl *cloudwatchlogs.Client
 }

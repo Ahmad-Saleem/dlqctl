@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"io"
 	"regexp"
+	"strconv"
 	"sync"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 )
 
 type Client struct {
@@ -132,6 +136,95 @@ func (c *Client) Delete(ctx context.Context, queueURL, receiptHandle string) err
 		ReceiptHandle: &receiptHandle,
 	})
 	return err
+}
+
+// Release makes received messages visible again immediately (visibility
+// timeout 0), so a read-only look at a queue does not hide its messages.
+func (c *Client) Release(ctx context.Context, queueURL string, messages []Message) error {
+	for i := 0; i < len(messages); i += 10 {
+		batch := messages[i:min(i+10, len(messages))]
+
+		entries := make([]types.ChangeMessageVisibilityBatchRequestEntry, len(batch))
+		for j, m := range batch {
+			entries[j] = types.ChangeMessageVisibilityBatchRequestEntry{
+				Id:                aws.String(strconv.Itoa(j)),
+				ReceiptHandle:     aws.String(m.ReceiptHandle),
+				VisibilityTimeout: 0,
+			}
+		}
+
+		res, err := c.sqs.ChangeMessageVisibilityBatch(ctx, &sqs.ChangeMessageVisibilityBatchInput{
+			QueueUrl: &queueURL,
+			Entries:  entries,
+		})
+		if err != nil {
+			return err
+		}
+		if len(res.Failed) > 0 {
+			return fmt.Errorf("failed to release %d message(s): %s", len(res.Failed), aws.ToString(res.Failed[0].Message))
+		}
+	}
+	return nil
+}
+
+// Stats is a snapshot of a queue's attributes. Message counts are
+// approximate, as reported by SQS.
+type Stats struct {
+	Visible                  int
+	InFlight                 int
+	Delayed                  int
+	VisibilityTimeoutSeconds int
+	RetentionSeconds         int
+	RedrivePolicy            string
+}
+
+func (c *Client) Stats(ctx context.Context, queueURL string) (Stats, error) {
+	res, err := c.sqs.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+		QueueUrl: &queueURL,
+		AttributeNames: []types.QueueAttributeName{
+			types.QueueAttributeNameApproximateNumberOfMessages,
+			types.QueueAttributeNameApproximateNumberOfMessagesNotVisible,
+			types.QueueAttributeNameApproximateNumberOfMessagesDelayed,
+			types.QueueAttributeNameVisibilityTimeout,
+			types.QueueAttributeNameMessageRetentionPeriod,
+			types.QueueAttributeNameRedrivePolicy,
+		},
+	})
+	if err != nil {
+		return Stats{}, err
+	}
+
+	attr := func(name types.QueueAttributeName) int {
+		n, _ := strconv.Atoi(res.Attributes[string(name)])
+		return n
+	}
+
+	return Stats{
+		Visible:                  attr(types.QueueAttributeNameApproximateNumberOfMessages),
+		InFlight:                 attr(types.QueueAttributeNameApproximateNumberOfMessagesNotVisible),
+		Delayed:                  attr(types.QueueAttributeNameApproximateNumberOfMessagesDelayed),
+		VisibilityTimeoutSeconds: attr(types.QueueAttributeNameVisibilityTimeout),
+		RetentionSeconds:         attr(types.QueueAttributeNameMessageRetentionPeriod),
+		RedrivePolicy:            res.Attributes[string(types.QueueAttributeNameRedrivePolicy)],
+	}, nil
+}
+
+// SourceQueues returns the URLs of queues whose redrive policy points at dlqURL.
+func (c *Client) SourceQueues(ctx context.Context, dlqURL string) ([]string, error) {
+	var urls []string
+
+	p := sqs.NewListDeadLetterSourceQueuesPaginator(c.sqs, &sqs.ListDeadLetterSourceQueuesInput{
+		QueueUrl: &dlqURL,
+	})
+	for p.HasMorePages() {
+		page, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		urls = append(urls, page.QueueUrls...)
+	}
+
+	return urls, nil
 }
 
 func MatchFilter(body, filter string) (bool, error) {

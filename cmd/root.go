@@ -7,7 +7,8 @@ var rootCmd = &cobra.Command{
 	Short: "Dead-letter queue manager for SQS",
 }
 
-func Execute() error {
+func Execute(version string) error {
+	rootCmd.Version = version
 	return rootCmd.Execute()
 }
 

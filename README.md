@@ -109,13 +109,84 @@ Searches a CloudWatch Log Group with a [filter pattern](https://docs.aws.amazon.
 | `--start` / `--end` | together | — | Absolute range in ISO 8601 (e.g. `2026-07-01T00:00:00Z`); `--end` must be after `--start` |
 | `--max` | no | `50` | Max events to return |
 
+### `dlqctl mcp`
+
+Runs an [MCP](https://modelcontextprotocol.io) server over stdio so AI agents can investigate DLQs during incidents. See [Use with AI agents](#use-with-ai-agents-mcp).
+
+| Flag | Required | Default | Description |
+|---|---|---|---|
+| `--allow-replay` | no | `false` | Expose the `dlq_replay` tool |
+
+## Use with AI agents (MCP)
+
+`dlqctl mcp` lets an AI agent (Claude Code, Claude Desktop, Cursor, or any MCP client) triage a dead-letter queue: check its depth, sample messages, pull matching CloudWatch logs, and report a likely root cause. By default it can only read.
+
+**1. Give it AWS credentials.** It uses the same credential chain as the CLI (`AWS_PROFILE`, SSO, and so on). Use a role limited to what the agent needs:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DlqctlRead",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:GetQueueAttributes",
+        "sqs:ListDeadLetterSourceQueues",
+        "sqs:ReceiveMessage",
+        "sqs:ChangeMessageVisibility",
+        "logs:FilterLogEvents"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Only if you enable replay, also allow `sqs:SendMessage` on the target queues and `sqs:DeleteMessage` on the DLQs. Scope `Resource` to your queue and log group ARNs where you can.
+
+**2. Register the server with your agent.**
+
+```sh
+# Claude Code
+claude mcp add dlqctl --env AWS_PROFILE=incident-readonly -- dlqctl mcp --region eu-west-1
+```
+
+Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "dlqctl": {
+      "command": "dlqctl",
+      "args": ["mcp", "--region", "eu-west-1"],
+      "env": { "AWS_PROFILE": "incident-readonly" }
+    }
+  }
+}
+```
+
+**3. Ask it to investigate**, e.g. *"orders-dlq is filling up, find out why"*, or use the built-in `investigate_dlq` prompt (in Claude Code: `/mcp__dlqctl__investigate_dlq`).
+
+| Tool | What it does |
+|---|---|
+| `dlq_stats` | Message counts, visibility timeout, retention, and the source queues that feed the DLQ |
+| `dlq_peek` | Read up to 100 messages (optional regex filter) |
+| `dlq_trace` | For each message, extract its correlation ID and search a Log Group for it |
+| `logs_search` | CloudWatch filter-pattern search over a relative or absolute time range |
+| `dlq_replay` | Only with `--allow-replay`. Send messages to a target queue, then delete them from the DLQ. Defaults to a dry run |
+
+Reading tools make messages visible again right after reading them, so an investigation never hides messages from a later replay. Message bodies and log lines are truncated to 4 KB to keep the agent's context small, and receipt handles are never exposed.
+
+**Replay safeguards:** `dlq_replay` only exists if the server was started with `--allow-replay`. It's marked destructive, so MCP clients ask you to approve every call. It previews by default (`dry_run: true`), so an actual replay is always a separate call with `dry_run: false` that you approve.
+
 ## Behavior notes
 
 - **Time windows**: `--since` accepts Go durations (`30m`, `2h`, `90s`) plus a `d` suffix for days (`1d` = 24h).
 - **Message fetching**: SQS caps a single receive at 10 messages; dlqctl batches receives until `--max` is reached or the queue stops returning messages. The first receive long-polls for up to 20s.
 - **Visibility**: `inspect` and `export` leave messages in flight until the queue's visibility timeout expires; re-running immediately may return fewer messages.
 - **Exit codes**: `0` on success (including "no messages found"); non-zero on invalid flags, AWS errors, or any failed replay.
-- **Required AWS permissions**: `sqs:ReceiveMessage` (inspect/export/replay), `sqs:SendMessage` + `sqs:DeleteMessage` (replay), `logs:FilterLogEvents` (logs, inspect --trace).
+- **Required AWS permissions**: `sqs:ReceiveMessage` (inspect/export/replay), `sqs:SendMessage` + `sqs:DeleteMessage` (replay), `logs:FilterLogEvents` (logs, inspect --trace). For `mcp`, see the [policy above](#use-with-ai-agents-mcp).
 
 ## Development
 
@@ -129,11 +200,12 @@ go test ./...    # unit tests (no AWS credentials needed)
 
 ```
 main.go                    # entry point; delegates to cmd.Execute()
-cmd/                       # cobra commands: root, inspect, replay, export, logs, helpers
+cmd/                       # cobra commands: root, inspect, replay, export, logs, mcp, helpers
 internal/queue/            # SQS client (receive/send/delete, worker pool), filtering, JSON/CSV writers
 internal/logs/             # CloudWatch Logs FilterLogEvents client with pagination
 internal/extract/          # JSON field extraction for --trace
-internal/timeparse/        # --since parsing (Go durations + "d" suffix)
+internal/timeparse/        # --since parsing (Go durations + "d" suffix) and start/end ranges
+internal/mcpserver/        # MCP tools, prompt, and server instructions for `dlqctl mcp`
 ```
 
 ### CI & releases
