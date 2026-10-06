@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-A CLI for operating on AWS SQS dead-letter queues: inspect stuck messages, correlate them with CloudWatch Logs, replay them back to their source queue, and export them to files.
+A CLI for operating on AWS SQS dead-letter queues: inspect stuck messages, correlate them with CloudWatch Logs, replay them back to their source queue, export them to files, and let Claude investigate why they failed.
 
 > Currently supports **SQS** (Kafka support is planned). All commands use the standard AWS credential chain (environment variables, shared config/credentials files, SSO, instance roles).
 
@@ -45,6 +45,9 @@ dlqctl export -q <dlq-url> -o dlq-dump.json
 
 # Search a CloudWatch Log Group directly
 dlqctl logs --log-group /aws/lambda/orders-consumer --pattern "ERROR" --since 30m
+
+# Let Claude find the root cause and write a report (needs ANTHROPIC_API_KEY)
+dlqctl investigate -q <dlq-url> --log-group /aws/lambda/orders-consumer > report.md
 ```
 
 ## Commands
@@ -109,6 +112,21 @@ Searches a CloudWatch Log Group with a [filter pattern](https://docs.aws.amazon.
 | `--start` / `--end` | together | — | Absolute range in ISO 8601 (e.g. `2026-07-01T00:00:00Z`); `--end` must be after `--start` |
 | `--max` | no | `50` | Max events to return |
 
+### `dlqctl investigate`
+
+Runs an AI agent that investigates a DLQ by itself and prints a Markdown root-cause report: what is failing, since when, how many messages are affected, the evidence (log lines, message IDs), the recommended fix, and the `dlqctl` commands to replay once it's fixed. It uses the Claude API and the same tools as [`dlqctl mcp`](#use-with-ai-agents-mcp), so you don't need an MCP client.
+
+| Flag | Short | Required | Default | Description |
+|---|---|---|---|---|
+| `--queue` | `-q` | yes | — | SQS URL of the dead-letter queue |
+| `--log-group` | | no | — | CloudWatch Log Group of the consumer. Optional, but without it the agent can only reason from message bodies |
+| `--model` | | no | `claude-opus-5` | Claude model; must support adaptive thinking |
+| `--max-turns` | | no | `20` | Max model turns before giving up; bounds API cost |
+
+- **Read-only.** The agent gets only the read-only tools. It releases every message right after reading it and never replays or deletes, so it needs only the [read-only IAM policy](#use-with-ai-agents-mcp).
+- **Claude API access.** It needs `ANTHROPIC_API_KEY` (or a profile from `ant auth login`), and each run costs API usage.
+- **Output.** Each tool call is printed to stderr as it runs; the report goes to stdout, so `> report.md` saves just the report.
+
 ### `dlqctl mcp`
 
 Runs an [MCP](https://modelcontextprotocol.io) server over stdio so AI agents can investigate DLQs during incidents. See [Use with AI agents](#use-with-ai-agents-mcp).
@@ -119,7 +137,7 @@ Runs an [MCP](https://modelcontextprotocol.io) server over stdio so AI agents ca
 
 ## Use with AI agents (MCP)
 
-`dlqctl mcp` lets an AI agent (Claude Code, Claude Desktop, Cursor, or any MCP client) triage a dead-letter queue: check its depth, sample messages, pull matching CloudWatch logs, and report a likely root cause. By default it can only read.
+`dlqctl mcp` lets an AI agent (Claude Code, Claude Desktop, Cursor, or any MCP client) triage a dead-letter queue: check its depth, sample messages, pull matching CloudWatch logs, and report a likely root cause. By default it can only read. No MCP client at hand? [`dlqctl investigate`](#dlqctl-investigate) runs the same investigation from the command line.
 
 **1. Give it AWS credentials.** It uses the same credential chain as the CLI (`AWS_PROFILE`, SSO, and so on). Use a role limited to what the agent needs:
 
@@ -186,7 +204,7 @@ Reading tools make messages visible again right after reading them, so an invest
 - **Message fetching**: SQS caps a single receive at 10 messages; dlqctl batches receives until `--max` is reached or the queue stops returning messages. The first receive long-polls for up to 20s.
 - **Visibility**: `inspect` and `export` leave messages in flight until the queue's visibility timeout expires; re-running immediately may return fewer messages.
 - **Exit codes**: `0` on success (including "no messages found"); non-zero on invalid flags, AWS errors, or any failed replay.
-- **Required AWS permissions**: `sqs:ReceiveMessage` (inspect/export/replay), `sqs:SendMessage` + `sqs:DeleteMessage` (replay), `logs:FilterLogEvents` (logs, inspect --trace). For `mcp`, see the [policy above](#use-with-ai-agents-mcp).
+- **Required AWS permissions**: `sqs:ReceiveMessage` (inspect/export/replay), `sqs:SendMessage` + `sqs:DeleteMessage` (replay), `logs:FilterLogEvents` (logs, inspect --trace). For `mcp` and `investigate`, see the [policy above](#use-with-ai-agents-mcp).
 
 ## Development
 
@@ -200,12 +218,13 @@ go test ./...    # unit tests (no AWS credentials needed)
 
 ```
 main.go                    # entry point; delegates to cmd.Execute()
-cmd/                       # cobra commands: root, inspect, replay, export, logs, mcp, helpers
+cmd/                       # cobra commands: root, inspect, replay, export, logs, investigate, mcp, helpers
 internal/queue/            # SQS client (receive/send/delete, worker pool), filtering, JSON/CSV writers
 internal/logs/             # CloudWatch Logs FilterLogEvents client with pagination
 internal/extract/          # JSON field extraction for --trace
 internal/timeparse/        # --since parsing (Go durations + "d" suffix) and start/end ranges
 internal/mcpserver/        # MCP tools, prompt, and server instructions for `dlqctl mcp`
+internal/agent/            # Claude tool loop behind `dlqctl investigate`; drives mcpserver in process
 ```
 
 ### CI & releases

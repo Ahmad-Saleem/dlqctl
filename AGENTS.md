@@ -4,11 +4,11 @@ Guidance for AI coding agents working in this repository. User-facing docs (inst
 
 ## Project
 
-`dlqctl` is a Go CLI for operating on AWS SQS dead-letter queues: inspect stuck messages, correlate them with CloudWatch Logs, replay them to a target queue, and export them to JSON/CSV. `dlqctl mcp` also runs it as an MCP server so AI agents can investigate DLQs during incidents. Kafka support is planned but **not implemented** — don't assume any Kafka code exists.
+`dlqctl` is a Go CLI for operating on AWS SQS dead-letter queues: inspect stuck messages, correlate them with CloudWatch Logs, replay them to a target queue, and export them to JSON/CSV. `dlqctl mcp` also runs it as an MCP server so AI agents can investigate DLQs during incidents, and `dlqctl investigate` runs a built-in, read-only Claude agent that does the investigation itself. Kafka support is planned but **not implemented** — don't assume any Kafka code exists.
 
 - Module: `github.com/ahmad-saleem/dlqctl`
 - Go: `1.26.1` (from `go.mod`; CI reads it via `go-version-file`)
-- Dependencies: `spf13/cobra` (CLI), `aws-sdk-go-v2` (`config`, `service/sqs`, `service/cloudwatchlogs`), `modelcontextprotocol/go-sdk` (MCP server). No viper, no logging library, no test framework beyond `testing`.
+- Dependencies: `spf13/cobra` (CLI), `aws-sdk-go-v2` (`config`, `service/sqs`, `service/cloudwatchlogs`), `modelcontextprotocol/go-sdk` (MCP server), `anthropics/anthropic-sdk-go` (Claude API, `investigate` only). No viper, no logging library, no test framework beyond `testing`.
 - AWS auth: standard default credential chain via `config.LoadDefaultConfig`. Region comes only from the global `--region/-R` flag (default `eu-west-1`).
 
 ## Commands
@@ -35,6 +35,7 @@ cmd/
   export.go                 export: receive + write JSON/CSV file
   logs.go                   logs: CloudWatch FilterLogEvents search
   mcp.go                    mcp: stdio MCP server; --allow-replay exposes dlq_replay
+  investigate.go            investigate: builds the MCP server (read-only) and runs agent.Run; report → stdout, progress → stderr
   validate_test.go          unit tests for flag validation
 internal/
   queue/queue.go            Queue interface (what cmd/ depends on)
@@ -42,6 +43,7 @@ internal/
   logs/client.go            Searcher interface; *Client for CloudWatch Logs, Search() with pagination
   mcpserver/server.go       New(): registers MCP tools, server instructions, investigate_dlq prompt
   mcpserver/tools.go        tool handlers, typed input/output structs, size limits
+  agent/agent.go            Run(): Claude tool loop that drives mcpserver over an in-memory MCP transport
   extract/extract.go        Field(): pull a correlation value out of a JSON body
   timeparse/timeparse.go    ParseSince(): Go durations + "d" suffix; Resolve(): since or start/end range
 ```
@@ -67,7 +69,15 @@ Data flow: `cmd/*` parses flags → builds a client with the region flag → cal
 - Tool inputs and outputs are typed structs. The SDK generates JSON schemas from them: fields without `omitempty` are required, and `jsonschema:"..."` tags become the descriptions the agent reads, so write them for a model. A handler error becomes a tool error the agent can see and fix. Use it for bad input, and report per-item failures inside the output instead (see `dlq_trace`).
 - Reading tools call `queue.Release` after receiving, so peeking doesn't hide messages from a later replay. Receipt handles are never returned to the agent.
 - Keep results small: `max` is capped per tool, and bodies and log lines are truncated at `maxTextBytes`. Initialize output slices to empty (not nil), so they encode as `[]` rather than `null`.
-- When you add a CLI capability, decide whether agents need it too. If they do, add a tool with a test in `server_test.go` (in-memory transport + fakes).
+- When you add a CLI capability, decide whether agents need it too. If they do, add a tool with a test in `server_test.go` (in-memory transport + fakes). A new read-only tool is picked up by `dlqctl investigate` automatically.
+
+## Investigate agent (`internal/agent`)
+
+- `agent.Run` does not implement any tools itself. It connects to `mcpserver.New(...)` over `mcp.NewInMemoryTransports()`, turns the listed tools into Claude tools, uses the server's instructions as part of the system prompt, and starts from the `investigate_dlq` prompt. Change tool behaviour in `internal/mcpserver`, not here.
+- **Read-only, twice.** `cmd/investigate.go` never sets `AllowReplay`, and `Run` offers and executes only tools with `ReadOnlyHint`; any other tool name gets an `is_error` result. Keep both guards.
+- Tool calls within a turn run **sequentially**, because concurrent receives on the same queue would hide messages from each other. Tool errors go back to the model as `is_error` results rather than aborting the run.
+- Claude API call: the beta Messages API (`client.Beta.Messages`) with the `claude-opus-5` default (`--model`), adaptive thinking, top-level prompt caching and server-side refusal fallback (`fallbacks: "default"`). The loop is bounded by `--max-turns`.
+- Tests fake the `agent.Messages` interface with scripted `BetaMessage` JSON and run the real `mcpserver` on queue/logs fakes. They never call the Claude API.
 
 ## AWS/SQS facts that matter
 
@@ -76,7 +86,7 @@ Data flow: `cmd/*` parses flags → builds a client with the region flag → cal
 - `queue.MatchFilter("", body)` returns `true` (empty filter = match all). `inspect` relies on this by calling it unconditionally.
 - `FilterLogEvents` accepts `Limit` 1–10000 per page. `logs.Client.Search` paginates via `NextToken` until it has `max` events.
 - `extract.Field` with an empty field name falls back to `requestId`, then `correlationId`, then `traceId`. The body must be a JSON object.
-- IAM needed: `sqs:ReceiveMessage`, `sqs:SendMessage`, `sqs:DeleteMessage`, `logs:FilterLogEvents`; the MCP server also needs `sqs:GetQueueAttributes`, `sqs:ListDeadLetterSourceQueues` and `sqs:ChangeMessageVisibility` (for `Release`).
+- IAM needed: `sqs:ReceiveMessage`, `sqs:SendMessage`, `sqs:DeleteMessage`, `logs:FilterLogEvents`; the MCP server and `investigate` also need `sqs:GetQueueAttributes`, `sqs:ListDeadLetterSourceQueues` and `sqs:ChangeMessageVisibility` (for `Release`).
 
 ## Known limitations
 

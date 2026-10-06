@@ -39,6 +39,29 @@ func TestInspectOptionsValidate(t *testing.T) {
 	}
 }
 
+func TestInvestigateOptionsValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		opts    investigateOptions
+		wantErr bool
+	}{
+		{name: "defaults are valid", opts: investigateOptions{model: "claude-opus-5", maxTurns: 20}},
+		{name: "max turns at limit", opts: investigateOptions{model: "claude-opus-5", maxTurns: maxInvestigateTurns}},
+		{name: "zero max turns", opts: investigateOptions{model: "claude-opus-5", maxTurns: 0}, wantErr: true},
+		{name: "max turns over limit", opts: investigateOptions{model: "claude-opus-5", maxTurns: maxInvestigateTurns + 1}, wantErr: true},
+		{name: "empty model", opts: investigateOptions{maxTurns: 20}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.opts.validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestValidateReplay(t *testing.T) {
 	tests := []struct {
 		name    string
